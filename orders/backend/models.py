@@ -62,14 +62,17 @@ class Product(models.Model):
 class ProductInfo(models.Model):
     product = models.ForeignKey(Product, on_delete=CASCADE, verbose_name='название', related_name='product_infos')
     shop = models.ForeignKey(Shop, on_delete=CASCADE, verbose_name='магазины', related_name='shops', blank=True, null=True)
-    model = models.CharField(max_length=50,)
+    model = models.CharField(max_length=50, verbose_name='модель', )
     quantity = models.PositiveIntegerField(verbose_name='количество')
     price = models.PositiveIntegerField(verbose_name='цена')
-    price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена')
+    price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена', default=0)
 
     class Meta:
         verbose_name = 'Информация о продукте'
         verbose_name_plural = "Список информации о продукте"
+
+    def __str__(self):
+        return f'{self.product}'
 
 
 class Contact(models.Model):
@@ -106,7 +109,8 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=CASCADE, blank=True, null=True, verbose_name='заказ')
-    product_info = models.ForeignKey(ProductInfo, on_delete=CASCADE, verbose_name='информация о продукте', blank=True, null=True)
+    product_info = models.ForeignKey(ProductInfo, on_delete=CASCADE, verbose_name='информация о продукте', blank=True,
+                                     null=True)
     quantity = models.PositiveIntegerField(verbose_name='количество', blank=True)
 
     class Meta:
