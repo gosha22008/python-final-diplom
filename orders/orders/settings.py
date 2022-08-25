@@ -129,6 +129,8 @@ AUTH_USER_MODEL = 'backend.User'
 
 PATH_TO_FILE = '/mnt/d/Projects/python-final-diplom/python-final-diplom/data/shop1.yaml'
 
+EMAIL_HOST_USER = 'gosha220008@gmail.com'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field
 

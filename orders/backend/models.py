@@ -136,8 +136,7 @@ class Product(models.Model):
 
 class ProductInfo(models.Model):
     product = models.ForeignKey(Product, on_delete=CASCADE, verbose_name='название', related_name='product_infos')
-    shop = models.ForeignKey(Shop, on_delete=CASCADE, verbose_name='магазины', related_name='shops', blank=True,
-                             null=True)
+    shop = models.ForeignKey(Shop, on_delete=CASCADE, verbose_name='магазины', related_name='shops', blank=True)
     external_id = models.PositiveIntegerField(verbose_name='Внешний ИД')
     model = models.CharField(max_length=50, verbose_name='модель', )
     quantity = models.PositiveIntegerField(verbose_name='количество')
@@ -156,11 +155,11 @@ class ProductInfo(models.Model):
 
 
 class Contact(models.Model):
-    user = models.ForeignKey(User, on_delete=CASCADE, verbose_name='Пользователь', blank=True, null=True)
-    phone = models.CharField(max_length=20, verbose_name='Телефон', blank=True)
-    city = models.CharField(max_length=20, verbose_name='Город', blank=True)
-    street = models.CharField(max_length=20, verbose_name='Улица', blank=True)
-    house = models.CharField(max_length=20, verbose_name='Дом', blank=True)
+    user = models.ForeignKey(User, on_delete=CASCADE, verbose_name='Пользователь', related_name='contacts', blank=True)
+    phone = models.CharField(max_length=20, verbose_name='Телефон',)
+    city = models.CharField(max_length=20, verbose_name='Город', )
+    street = models.CharField(max_length=20, verbose_name='Улица',)
+    house = models.CharField(max_length=20, verbose_name='Дом',)
     structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
     building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
     apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
@@ -174,9 +173,10 @@ class Contact(models.Model):
 
 
 class Order(models.Model):
-    user = models.ForeignKey(User, on_delete=CASCADE, verbose_name='Пользователь', blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=CASCADE, verbose_name='Пользователь', blank=True,
+                             related_name='orders')
     dt = models.DateTimeField(auto_now_add=True, verbose_name='время заказа',)
-    status = models.CharField(max_length=20, choices=STATE_CHOICES, verbose_name='статус заказа', blank=True)
+    status = models.CharField(max_length=20, choices=STATE_CHOICES, verbose_name='статус заказа')
     contact = models.ForeignKey(Contact, on_delete=CASCADE, verbose_name='контакты', blank=True, null=True)
 
     class Meta:
@@ -188,9 +188,10 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=CASCADE, blank=True, null=True, verbose_name='заказ')
+    order = models.ForeignKey(Order, on_delete=CASCADE, blank=True, verbose_name='заказ',
+                              related_name='ordered_items')
     product_info = models.ForeignKey(ProductInfo, on_delete=CASCADE, verbose_name='информация о продукте', blank=True,
-                                     null=True)
+                                     related_name='ordered_items')
     quantity = models.PositiveIntegerField(verbose_name='количество', blank=True)
 
     class Meta:
