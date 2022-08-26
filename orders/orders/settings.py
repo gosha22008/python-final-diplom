@@ -11,21 +11,28 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+import environ
+
+env = environ.Env(
+    DEBUG=(bool, True)
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-@r-%%$+9a2r$edyiq#a*o$1b=(@7+8e%u@peqk@#trexv=d)13'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -41,6 +48,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'backend.apps.BackendConfig',
     'rest_framework.authtoken',
+    'django_rest_passwordreset',
 ]
 
 MIDDLEWARE = [
@@ -80,11 +88,11 @@ WSGI_APPLICATION = 'orders.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'my_diplom',
-        'PORT': 5432,
-        'HOST': '0.0.0.0',
-        'PASSWORD': '1234',
-        'USER': 'admin',
+        'NAME': env('DB_NAME'),
+        'PORT': env.int('DB_PORT'),
+        'HOST': env('DB_HOST'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'USER': env('DB_USER'),
     }
 }
 
@@ -127,9 +135,16 @@ STATIC_URL = 'static/'
 
 AUTH_USER_MODEL = 'backend.User'
 
-PATH_TO_FILE = '/mnt/d/Projects/python-final-diplom/python-final-diplom/data/shop1.yaml'
+PATH_TO_FILE = env('PATH_TO_FILE')
 
-EMAIL_HOST_USER = 'gosha220008@gmail.com'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+EMAIL_HOST = env('EMAIL_HOST')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = env('EMAIL_PORT')
+EMAIL_USE_SSL = env('EMAIL_USE_SSL')
+SERVER_EMAIL = env('EMAIL_HOST_USER')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field

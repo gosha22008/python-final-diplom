@@ -1,13 +1,7 @@
-import functools
 from distutils.util import strtobool
-from rest_framework.filters import SearchFilter
-from yaml import load, Loader, FullLoader
+from rest_framework.generics import ListAPIView
+from yaml import load, FullLoader
 from django.conf import settings
-from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
-from django.shortcuts import render
-from rest_framework import generics, viewsets
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
@@ -15,49 +9,28 @@ from django.db.models import Q, Sum, F
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.http import JsonResponse
-from .models import Shop, Category, Product, ProductInfo, Order, OrderItem, Contact, Parameter, ProductParameter
-from .permissions import IsOwnerOrReadOnly
-from .serializers import ProductSerializer, CategorySerializer, ShopSerializer, OrderSerializer, \
+from .models import Shop, Category, Product, ProductInfo, Order, OrderItem, Contact, Parameter, ProductParameter, \
+    ConfirmEmailToken
+
+from .serializers import CategorySerializer, ShopSerializer, OrderSerializer, \
     ProductInfoSerializer, OrderItemSerializer, ContactSerializer, UserSerializer
+from .signals import new_user_registered, new_order
 
 
-class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
-    serializer_class = ProductSerializer
-    filter_backends = [SearchFilter]
-    search_fields = ['name']
-
-
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryView(ListAPIView):
+    """
+    Класс для просмотра категорий
+    """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
 
-class ShopViewSet(viewsets.ModelViewSet):
+class ShopView(ListAPIView):
+    """
+    Класс для просмотра списка магазинов
+    """
     queryset = Shop.objects.filter(state=True)
     serializer_class = ShopSerializer
-
-
-class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()
-    serializer_class = OrderSerializer
-    # permission_classes = [IsOwnerOrReadOnly]
-
-
-class ProductInfoViewSet(viewsets.ModelViewSet):
-    queryset = ProductInfo.objects.all()
-    serializer_class = ProductInfoSerializer
-
-
-class OrderItemViewSet(viewsets.ModelViewSet):
-    queryset = OrderItem.objects.all()
-    serializer_class = OrderItemSerializer
-    # permission_classes = [IsOwnerOrReadOnly]
-
-
-class ContactViewSet(viewsets.ModelViewSet):
-    queryset = Contact.objects.all()
-    serializer_class = ContactSerializer
 
 
 class RegisterAccount(APIView):
@@ -79,11 +52,12 @@ class RegisterAccount(APIView):
                     user = user_serialize.save()
                     user.set_password(request.data["password"])
                     user.save()
+                    new_user_registered.send(sender=self.__class__, user_id=user.id)
                     return JsonResponse({"Status": True, "user": f"{user}"})
                 else:
                     return JsonResponse({"Status": False, "Error": user_serialize.errors})
         else:
-            return JsonResponse({"Status": False, "Error": "Nevernie argumenti"})
+            return JsonResponse({"Status": False, "Error": "Invalid arguments"})
 
 
 class LoginAccount(APIView):
@@ -91,16 +65,15 @@ class LoginAccount(APIView):
     Класс авторизации пользователя
     """
     def post(self, request, *args, **kwargs):
-        print(request.user)
         if {'email', 'password'}.issubset(request.data):
             user = authenticate(request, username=request.data['email'], password=request.data['password'])
-            print(user)
+
             if user is not None:
                 if user.is_active:
                     token, _ = Token.objects.get_or_create(user=user)
                     return JsonResponse({'Status': True, "Token": token.key})
-            return JsonResponse({'Status': False, 'Errors': 'Ne ydalos avtorizovat'})
-        return JsonResponse({'Status': False, 'Errors': 'Ne ykazani vse neobhodimie argumenti'})
+            return JsonResponse({'Status': False, 'Errors': 'Failed to authorize'})
+        return JsonResponse({'Status': False, 'Errors': 'All necessary arguments are not specified'})
 
 
 class PartnerUpdate(APIView):
@@ -109,10 +82,10 @@ class PartnerUpdate(APIView):
     """
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return JsonResponse({"Status": False, "Error": "Oshibka auth"})
+            return JsonResponse({"Status": False, "Error": "Error auth"})
 
         if request.user.type != "shop":
-            return JsonResponse({"Status": False, "Error": "Tolko dlya Shop"})
+            return JsonResponse({"Status": False, "Error": "Only for Shop"})
 
         if settings.PATH_TO_FILE:
             with open(settings.PATH_TO_FILE) as fh:
@@ -141,7 +114,7 @@ class PartnerUpdate(APIView):
 
             return JsonResponse({"Status": True})
         else:
-            return JsonResponse({"Status": False, "Error": "Oshibka pyti"})
+            return JsonResponse({"Status": False, "Error": "Path error"})
 
 
 class ProductInfoView(APIView):
@@ -184,7 +157,7 @@ class PartnerState(APIView):
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
 
         if request.user.type != 'shop':
-            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
+            return JsonResponse({'Status': False, 'Error': 'Only for shops'}, status=403)
 
         shop = request.user.shop
         serializer = ShopSerializer(shop)
@@ -205,7 +178,7 @@ class PartnerState(APIView):
             except ValueError as error:
                 return JsonResponse({"Status": False, "Error": f'{str(error)}'})
         else:
-            return JsonResponse({"Status": False, "Error": "Ne vse argumenti"})
+            return JsonResponse({"Status": False, "Error": "All necessary arguments are not specified"})
 
 
 class ContactView(APIView):
@@ -252,7 +225,7 @@ class ContactView(APIView):
 
                     return JsonResponse({"Status": False, "Error": serializer.errors})
 
-        return JsonResponse({"Status": False, "Error": 'ne vse argumenti'})
+        return JsonResponse({"Status": False, "Error": 'All necessary arguments are not specified'})
 
     def delete(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -274,6 +247,7 @@ class AccountDetails(APIView):
     """
     Класс для работы данными пользователя
     """
+    # получить данные
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
@@ -281,6 +255,7 @@ class AccountDetails(APIView):
         serializer = UserSerializer(request.user)
         return Response(data=serializer.data)
 
+    # редактирование методом PATCH
     def patch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
@@ -315,6 +290,7 @@ class BasketView(APIView):
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
 
         items_string = request.data.get('items')
+
         if items_string:
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
             objects_created = 0
@@ -332,7 +308,7 @@ class BasketView(APIView):
                 else:
                     JsonResponse({'Status': False, 'Errors': serializer.errors})
 
-            return JsonResponse({'Status': True, 'Создано объектов': objects_created})
+            return JsonResponse({'Status': True, 'Objects created': objects_created})
 
         return JsonResponse({"Status": False})
 
@@ -412,6 +388,7 @@ class OrderView(APIView):
     """
     Класс для получения и размешения заказов пользователями
     """
+    # получение заказа пользователя
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
@@ -439,7 +416,30 @@ class OrderView(APIView):
                     return JsonResponse({'Status': False, 'Errors': str(error)})
                 else:
                     if is_updated:
-                        #new_order.send(sender=self.__class__, user_id=request.user.id)
+                        new_order.send(sender=self.__class__, user_id=request.user.id)
                         return JsonResponse({'Status': True})
+
+        return JsonResponse({'Status': False, 'Errors': 'All necessary arguments are not specified'})
+
+
+class ConfirmAccount(APIView):
+    """
+    Класс для подтверждения почтового адреса
+    """
+    # Регистрация методом POST
+    def post(self, request, *args, **kwargs):
+
+        # проверяем обязательные аргументы
+        if {'email', 'token'}.issubset(request.data):
+
+            token = ConfirmEmailToken.objects.filter(user__email=request.data['email'],
+                                                     key=request.data['token']).first()
+            if token:
+                token.user.is_active = True
+                token.user.save()
+                token.delete()
+                return JsonResponse({'Status': True})
+            else:
+                return JsonResponse({'Status': False, 'Errors': 'Неправильно указан токен или email'})
 
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
