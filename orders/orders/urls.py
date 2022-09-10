@@ -37,5 +37,4 @@ urlpatterns = [
     path('order', OrderView.as_view(), name='order'),
     path('categories', CategoryView.as_view(), name='categories'),
     path('shops', ShopView.as_view(), name='shops'),
-
 ]

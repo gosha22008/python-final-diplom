@@ -146,6 +146,12 @@ EMAIL_PORT = env('EMAIL_PORT')
 EMAIL_USE_SSL = env('EMAIL_USE_SSL')
 SERVER_EMAIL = env('EMAIL_HOST_USER')
 
+
+# CELERY STUFF
+CELERY_BROKER_URL = env('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
+
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field
 

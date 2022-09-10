@@ -78,7 +78,7 @@ class User(AbstractUser):
     )
     is_active = models.BooleanField(
         'active',
-        default=True,
+        default=False,
         help_text=
             'Designates whether this user should be treated as active. '
             'Unselect this instead of deleting accounts.'

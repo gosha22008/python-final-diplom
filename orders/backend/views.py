@@ -1,6 +1,5 @@
 from distutils.util import strtobool
 from rest_framework.generics import ListAPIView
-from yaml import load, FullLoader
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
@@ -9,12 +8,11 @@ from django.db.models import Q, Sum, F
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.http import JsonResponse
-from .models import Shop, Category, Product, ProductInfo, Order, OrderItem, Contact, Parameter, ProductParameter, \
-    ConfirmEmailToken
+from .models import Shop, Category, ProductInfo, Order, OrderItem, Contact, ConfirmEmailToken
 
 from .serializers import CategorySerializer, ShopSerializer, OrderSerializer, \
     ProductInfoSerializer, OrderItemSerializer, ContactSerializer, UserSerializer
-from .signals import new_user_registered, new_order
+from .tasks import send_email_new_user_registered_task, send_email_new_order_task, do_import_task
 
 
 class CategoryView(ListAPIView):
@@ -52,7 +50,7 @@ class RegisterAccount(APIView):
                     user = user_serialize.save()
                     user.set_password(request.data["password"])
                     user.save()
-                    new_user_registered.send(sender=self.__class__, user_id=user.id)
+                    send_email_new_user_registered_task.delay(user_id=user.id)
                     return JsonResponse({"Status": True, "user": f"{user}"})
                 else:
                     return JsonResponse({"Status": False, "Error": user_serialize.errors})
@@ -88,33 +86,11 @@ class PartnerUpdate(APIView):
             return JsonResponse({"Status": False, "Error": "Only for Shop"})
 
         if settings.PATH_TO_FILE:
-            with open(settings.PATH_TO_FILE) as fh:
-                # Load YAML data from the file
-                read_data = load(fh, Loader=FullLoader)
-            shop, _ = Shop.objects.get_or_create(name=read_data['shop'])
-            for cate_gory in read_data['categories']:
-                category, _ = Category.objects.get_or_create(id=cate_gory['id'], name=cate_gory['name'])
-                category.shops.add(shop.id)
-                category.save()
-                ProductInfo.objects.filter(shop_id=shop.id).delete()
-                for item in read_data['goods']:
-                    product, _ = Product.objects.get_or_create(name=item['name'], category_id=item['category'])
-                    product_info = ProductInfo.objects.create(product_id=product.id,
-                                                              shop_id=shop.id,
-                                                              external_id=item['id'],
-                                                              model=item['model'],
-                                                              quantity=item['quantity'],
-                                                              price=item['price'],
-                                                              price_rrc=item['price_rrc'])
-                    for param_name, param_val in item['parameters'].items():
-                        parameter, _ = Parameter.objects.get_or_create(name=param_name)
-                        ProductParameter.objects.create(product_info_id=product_info.id,
-                                                                        parameter_id=parameter.id,
-                                                                        value=param_val)
+            res = do_import_task.delay()
+            if res.get():
+                return JsonResponse({"Status": True})
 
-            return JsonResponse({"Status": True})
-        else:
-            return JsonResponse({"Status": False, "Error": "Path error"})
+        return JsonResponse({"Status": False})
 
 
 class ProductInfoView(APIView):
@@ -352,7 +328,6 @@ class BasketView(APIView):
 
         if items:
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
-            print(basket)
             if basket:
                 objects_deleted = 0
                 for item_id in items:
@@ -416,7 +391,7 @@ class OrderView(APIView):
                     return JsonResponse({'Status': False, 'Errors': str(error)})
                 else:
                     if is_updated:
-                        new_order.send(sender=self.__class__, user_id=request.user.id)
+                        send_email_new_order_task.delay(user_id=request.user.id)
                         return JsonResponse({'Status': True})
 
         return JsonResponse({'Status': False, 'Errors': 'All necessary arguments are not specified'})
@@ -440,6 +415,6 @@ class ConfirmAccount(APIView):
                 token.delete()
                 return JsonResponse({'Status': True})
             else:
-                return JsonResponse({'Status': False, 'Errors': 'Неправильно указан токен или email'})
+                return JsonResponse({'Status': False, 'Errors': 'Bad token or email'})
 
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+        return JsonResponse({'Status': False, 'Errors': 'All necessary arguments are not specified'})
