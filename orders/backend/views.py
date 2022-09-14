@@ -9,6 +9,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.http import JsonResponse
 from .models import Shop, Category, ProductInfo, Order, OrderItem, Contact, ConfirmEmailToken
+from .throttles import ShopImportRateThrottle
 
 from .serializers import CategorySerializer, ShopSerializer, OrderSerializer, \
     ProductInfoSerializer, OrderItemSerializer, ContactSerializer, UserSerializer
@@ -78,6 +79,9 @@ class PartnerUpdate(APIView):
     """
     Класс обновления прайса
     """
+
+    throttle_classes = [ShopImportRateThrottle]
+
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({"Status": False, "Error": "Error auth"})
